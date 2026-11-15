@@ -141,6 +141,40 @@ class Settings(BaseSettings):
         description="Minimum seconds between identical object alert events",
     )
 
+    # Audio Proctoring & Voice Activity Detection (VAD) Thresholds
+    AUDIO_SAMPLE_RATE: int = Field(
+        default=16000,
+        description="Audio sampling rate in Hz for incoming PCM chunks and VAD",
+    )
+    AMBIENT_NOISE_CALIBRATION_SEC: float = Field(
+        default=20.0,
+        description="Duration in seconds at session start to establish ambient noise baseline",
+    )
+    SUSTAINED_SPEECH_THRESHOLD_SEC: float = Field(
+        default=3.0,
+        description="Continuous speech duration in seconds required to trigger a sustained speech alert",
+    )
+    SUDDEN_NOISE_RATIO_THRESHOLD: float = Field(
+        default=3.0,
+        description="Ratio of current chunk RMS to ambient baseline RMS to detect sudden loud noise",
+    )
+    SUDDEN_NOISE_MIN_RMS: float = Field(
+        default=0.08,
+        description="Minimum absolute RMS amplitude required to flag sudden loud noise (prevents quiet baseline false triggers)",
+    )
+    AUDIO_EVENT_COOLDOWN_SEC: float = Field(
+        default=5.0,
+        description="Minimum cooldown in seconds between duplicate audio event alerts",
+    )
+    LIP_MOTION_THRESHOLD: float = Field(
+        default=2.0,
+        description="Minimum lip landmark motion/variance below which speech is flagged as motionless lips",
+    )
+    VAD_SPEECH_THRESHOLD: float = Field(
+        default=0.50,
+        description="Probability threshold for Silero VAD speech detection",
+    )
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Convert comma-separated CORS origins into a list of strings."""

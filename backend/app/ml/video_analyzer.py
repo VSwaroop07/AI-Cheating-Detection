@@ -71,6 +71,8 @@ LANDMARK_LEFT_IRIS_CENTER = 468
 LANDMARK_RIGHT_IRIS_CENTER = 473
 LANDMARK_LEFT_MOUTH = 61
 LANDMARK_RIGHT_MOUTH = 291
+LANDMARK_UPPER_LIP = 13
+LANDMARK_LOWER_LIP = 14
 
 
 @dataclass
@@ -100,6 +102,9 @@ class VideoSessionState:
     gaze_deviation_dir: Optional[str] = None
     last_gaze_event_time: Optional[float] = None
 
+    # Lip aperture tracking for audio cross-check (inner lip landmarks 13-14)
+    lip_distances: Deque[float] = field(default_factory=lambda: deque(maxlen=30))
+
     # Sliding window observation history (last 100 frames)
     history: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=100))
 
@@ -117,6 +122,7 @@ class VideoSessionState:
         self.gaze_deviation_start = None
         self.gaze_deviation_dir = None
         self.last_gaze_event_time = None
+        self.lip_distances.clear()
         self.history.clear()
 
 
@@ -138,6 +144,8 @@ class VideoAnalysisResult:
     landmarks: Optional[List[Tuple[float, float, float]]] = None
     rotation_vec: Optional[np.ndarray] = None
     translation_vec: Optional[np.ndarray] = None
+    lip_distance: Optional[float] = None
+    lip_motion: Optional[float] = None
 
 
 class VideoAnalyzer:
@@ -220,6 +228,17 @@ class VideoAnalyzer:
     def remove_session(self, session_id: str) -> None:
         """Remove a session from memory upon completion."""
         self.sessions.pop(session_id, None)
+
+    def get_lip_motion(self, session_id: str) -> float:
+        """Return standard deviation of lip distance over recent frames (in pixels).
+
+        Higher values (>2.0px) indicate active speech or mouth movement.
+        Lower values (<2.0px) indicate closed or motionless lips.
+        """
+        state = self.get_session_state(session_id)
+        if len(state.lip_distances) < 2:
+            return 0.0
+        return float(np.std(list(state.lip_distances)))
 
     @staticmethod
     def decode_frame(frame: Union[np.ndarray, bytes, str]) -> Optional[np.ndarray]:
@@ -660,6 +679,24 @@ class VideoAnalyzer:
             # Gaze returned to center: single glance is NOT cheating
             session.gaze_deviation_start = None
 
+        # -------------------------------------------------------------
+        # Lip Movement Aperture Tracking (Audio-Visual Cross-Check)
+        # -------------------------------------------------------------
+        lip_dist: Optional[float] = None
+        lip_mot: Optional[float] = None
+        if len(primary_landmarks) > LANDMARK_LOWER_LIP:
+            lm_up = primary_landmarks[LANDMARK_UPPER_LIP]
+            lm_low = primary_landmarks[LANDMARK_LOWER_LIP]
+            lip_dist = float(
+                np.sqrt(
+                    ((lm_up.x - lm_low.x) * img_w) ** 2
+                    + ((lm_up.y - lm_low.y) * img_h) ** 2
+                )
+            )
+            session.lip_distances.append(lip_dist)
+            if len(session.lip_distances) >= 2:
+                lip_mot = float(np.std(list(session.lip_distances)))
+
         # Record into sliding window history
         session.history.append(
             {
@@ -671,6 +708,8 @@ class VideoAnalyzer:
                 "gaze_direction": gaze_direction,
                 "is_head_deviated": is_head_deviated,
                 "is_gaze_deviated": is_gaze_deviated,
+                "lip_distance": lip_dist,
+                "lip_motion": lip_mot,
             }
         )
 
@@ -689,6 +728,8 @@ class VideoAnalyzer:
             landmarks=pts_list,
             rotation_vec=rot_vec,
             translation_vec=trans_vec,
+            lip_distance=lip_dist,
+            lip_motion=lip_mot,
         )
 
     def draw_overlay(

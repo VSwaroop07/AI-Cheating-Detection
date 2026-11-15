@@ -16,3 +16,4 @@ scikit-learn>=1.4.0
 deepface>=0.0.90
 mediapipe>=0.10.0
 ultralytics>=8.0.0
+silero-vad>=6.0.0

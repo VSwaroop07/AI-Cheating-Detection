@@ -171,6 +171,10 @@ class DatabaseManager:
     @classmethod
     async def connect(cls) -> None:
         """Connect to MongoDB or initialize mock storage if unreachable."""
+        if cls.is_mock and cls.db is not None:
+            await cls.create_indexes()
+            return
+
         try:
             logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
             cls.client = AsyncIOMotorClient(
