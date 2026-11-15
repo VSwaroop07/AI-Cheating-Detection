@@ -1,13 +1,15 @@
-"""Video telemetry processing service using VideoAnalyzer."""
+"""Video telemetry processing service using VideoAnalyzer and ObjectDetector."""
 
 import logging
 from typing import Any, Dict, Optional
 
+from app.ml.object_detector import ObjectDetector
 from app.ml.video_analyzer import VideoAnalyzer
 
 logger = logging.getLogger(__name__)
 
 _video_analyzer: Optional[VideoAnalyzer] = None
+_object_detector: Optional[ObjectDetector] = None
 
 
 def get_video_analyzer() -> VideoAnalyzer:
@@ -16,6 +18,14 @@ def get_video_analyzer() -> VideoAnalyzer:
     if _video_analyzer is None:
         _video_analyzer = VideoAnalyzer()
     return _video_analyzer
+
+
+def get_object_detector() -> ObjectDetector:
+    """Retrieve or lazily initialize the singleton ObjectDetector instance."""
+    global _object_detector
+    if _object_detector is None:
+        _object_detector = ObjectDetector()
+    return _object_detector
 
 
 class VideoHandler:
@@ -27,7 +37,7 @@ class VideoHandler:
         candidate_id: str,
         payload: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Ingest, analyze with VideoAnalyzer, and return telemetry + events."""
+        """Ingest, analyze with VideoAnalyzer and ObjectDetector, and return telemetry + events."""
         image_base64 = payload.get("image_base64", "")
         frame_idx = payload.get("frame_index", 0)
         width = payload.get("width", 640)
@@ -35,13 +45,23 @@ class VideoHandler:
         timestamp = payload.get("timestamp", "")
         payload_size_kb = round(len(image_base64) * 0.75 / 1024, 2)
 
+        # 1. Run facial mesh, head pose, and gaze analysis
         analyzer = get_video_analyzer()
         analysis_res = analyzer.analyze_frame(
             session_id=session_id,
             frame=image_base64,
         )
 
-        event_payloads = [event.model_dump() for event in analysis_res.events]
+        # 2. Run object detection (YOLOv8n) with frame-interval throttling
+        detector = get_object_detector()
+        object_res = detector.detect_objects(
+            session_id=session_id,
+            frame=image_base64,
+        )
+
+        # Combine detected suspicious events from both CV modalities
+        all_events = analysis_res.events + object_res.events
+        event_payloads = [event.model_dump() for event in all_events]
 
         if event_payloads:
             logger.warning(
@@ -52,7 +72,8 @@ class VideoHandler:
             logger.info(
                 f"[VIDEO STREAM] Session: {session_id} | Candidate: {candidate_id} | "
                 f"Frame #{frame_idx} ({width}x{height}, ~{payload_size_kb} KB) | "
-                f"Faces: {analysis_res.face_count} | Gaze: {analysis_res.gaze_direction}"
+                f"Faces: {analysis_res.face_count} | Persons: {object_res.person_count} | "
+                f"Gaze: {analysis_res.gaze_direction} | Phone: {object_res.cell_phone_detected}"
             )
 
         return {
@@ -60,11 +81,17 @@ class VideoHandler:
             "stream": "video",
             "frame_index": frame_idx,
             "face_count": analysis_res.face_count,
+            "person_count": object_res.person_count,
             "head_pose": analysis_res.head_pose,
             "gaze_direction": analysis_res.gaze_direction,
             "is_head_deviated": analysis_res.is_head_deviated,
             "is_gaze_deviated": analysis_res.is_gaze_deviated,
             "is_verified": analysis_res.is_verified,
+            "cell_phone_detected": object_res.cell_phone_detected,
+            "cell_phone_confirmed": object_res.cell_phone_confirmed,
+            "detected_objects": [obj.to_dict() for obj in object_res.detections],
+            "object_inference_time_ms": object_res.inference_time_ms,
+            "is_object_inference_skipped": object_res.is_skipped,
             "events": event_payloads,
             "size_kb": payload_size_kb,
         }

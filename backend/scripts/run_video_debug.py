@@ -24,6 +24,7 @@ backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
+from app.ml.object_detector import ObjectDetector
 from app.ml.video_analyzer import VideoAnalyzer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -43,8 +44,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logger.info("Initializing VideoAnalyzer engine...")
+    logger.info("Initializing VideoAnalyzer and ObjectDetector engines...")
     analyzer = VideoAnalyzer()
+    object_detector = ObjectDetector()
     session_id = "webcam_debug_session"
 
     source = args.source if args.source else args.camera
@@ -85,23 +87,32 @@ def main() -> None:
         fps = 0.9 * fps + 0.1 * (1.0 / max(1e-5, current_time - prev_time))
         prev_time = current_time
 
-        # Analyze current frame
+        # Analyze current frame with VideoAnalyzer
         result = analyzer.analyze_frame(
             session_id=session_id,
             frame=frame,
             timestamp=current_time,
         )
 
+        # Run object detection (YOLOv8n)
+        obj_result = object_detector.detect_objects(
+            session_id=session_id,
+            frame=frame,
+            timestamp=current_time,
+        )
+
         # Log any newly triggered proctoring alerts
-        for event in result.events:
+        all_debug_events = result.events + obj_result.events
+        for event in all_debug_events:
             logger.warning(
                 f"[ALERT TRIGGERED] Modality: {event.modality} | Type: {event.type} | "
                 f"Severity: {event.severity} | Confidence: {event.confidence:.2f} | "
                 f"Description: {event.description}"
             )
 
-        # Render visual overlay
+        # Render visual overlay: facial mesh/pose HUD + YOLO object boxes
         overlay = analyzer.draw_overlay(frame, result)
+        overlay = object_detector.draw_overlay(overlay, obj_result)
 
         # Draw FPS counter
         cv2.putText(
@@ -122,6 +133,7 @@ def main() -> None:
             break
         elif key == ord("r"):  # Reset
             analyzer.reset_session(session_id)
+            object_detector.reset_session(session_id)
             logger.info("Session state reset.")
         elif key == ord("c"):  # Register candidate face
             emb = analyzer.face_auth.compute_embedding(frame)

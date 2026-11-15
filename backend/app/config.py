@@ -107,6 +107,40 @@ class Settings(BaseSettings):
         description="Path to MediaPipe FaceLandmarker .task model file",
     )
 
+    # Object Detection (YOLOv8n) Proctoring Thresholds
+    YOLO_MODEL_PATH: str = Field(
+        default="backend/app/ml/models/yolov8n.pt",
+        description="Path to YOLOv8n pretrained model weights (.pt or .onnx)",
+    )
+    OBJECT_DETECTION_INTERVAL: int = Field(
+        default=3,
+        description="Run object detection every Nth video frame to save CPU (e.g. 3-5)",
+    )
+    CELL_PHONE_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.50,
+        description="Confidence threshold for cell phone detection",
+    )
+    PERSON_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.50,
+        description="Confidence threshold for person count verification",
+    )
+    UNAUTHORIZED_OBJECT_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.45,
+        description="Confidence threshold for prohibited objects (book, laptop, remote)",
+    )
+    CELL_PHONE_CONFIRMATION_FRAMES: int = Field(
+        default=2,
+        description="Minimum positive detections required in last M frames to trigger alert",
+    )
+    CELL_PHONE_WINDOW_SIZE: int = Field(
+        default=3,
+        description="Sliding window size of processed frames for cell phone confirmation",
+    )
+    OBJECT_DETECTION_COOLDOWN_SEC: float = Field(
+        default=5.0,
+        description="Minimum seconds between identical object alert events",
+    )
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Convert comma-separated CORS origins into a list of strings."""

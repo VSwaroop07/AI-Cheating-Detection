@@ -1,0 +1,19 @@
+{
+  "settings_version": "0.0.8",
+  "datasets_dir": "C:\\Users\\Swaroop\\Documents\\Cheting Detections\\datasets",
+  "weights_dir": "C:\\Users\\Swaroop\\Documents\\Cheting Detections\\code\\weights",
+  "runs_dir": "C:\\Users\\Swaroop\\Documents\\Cheting Detections\\code\\runs",
+  "uuid": "c186733e477fdaf801ca44a0e551423aaba58d50020f29fbb08b3b7326cd529c",
+  "sync": true,
+  "api_key": "",
+  "openai_api_key": "",
+  "clearml": true,
+  "comet": true,
+  "dvc": true,
+  "mlflow": true,
+  "raytune": true,
+  "tensorboard": false,
+  "wandb": false,
+  "vscode_msg": true,
+  "openvino_msg": true
+}
