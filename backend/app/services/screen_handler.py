@@ -92,8 +92,31 @@ class ScreenHandler:
         payload: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Asynchronous wrapper for handle_screen_event invoked by the WebSocket stream."""
-        return ScreenHandler.process_screen_event(
+        result = ScreenHandler.process_screen_event(
             session_id=session_id,
             candidate_id=candidate_id,
             payload=payload,
         )
+
+        # For medium or high severity events with screenshot, ensure EvidenceService persists artifact
+        ev = result.get("event")
+        if ev and ev.get("severity") in ("medium", "high"):
+            screenshot_b64 = payload.get("screenshot_base64")
+            if screenshot_b64:
+                from app.schemas.event import SuspiciousEvent
+                from app.services.evidence_service import get_evidence_service
+
+                evidence_service = get_evidence_service()
+                try:
+                    ev_obj = SuspiciousEvent(**ev)
+                    evidence_path = await evidence_service.capture_evidence_for_event(
+                        event=ev_obj,
+                        triggering_frame=screenshot_b64,
+                        annotations={"details": payload.get("details", {})},
+                    )
+                    if evidence_path:
+                        ev["evidence_path"] = evidence_path
+                except Exception as exc:
+                    logger.warning(f"Error capturing evidence in screen handler: {exc}")
+
+        return result

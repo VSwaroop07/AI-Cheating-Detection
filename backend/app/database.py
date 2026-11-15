@@ -196,14 +196,15 @@ class DatabaseManager:
             return
 
         try:
+            import asyncio
             logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
             cls.client = AsyncIOMotorClient(
                 settings.MONGODB_URI,
-                serverSelectionTimeoutMS=1500,
+                serverSelectionTimeoutMS=500,
             )
             test_db = cls.client[settings.MONGODB_DB_NAME]
-            # Ping database to confirm availability
-            await cls.client.admin.command("ping")
+            # Ping database with strict 0.5s timeout to confirm availability
+            await asyncio.wait_for(cls.client.admin.command("ping"), timeout=0.5)
             cls.db = test_db
             cls.is_mock = False
             logger.info("Successfully connected to MongoDB.")
@@ -274,8 +275,9 @@ class DatabaseManager:
             logger.info("Closing MongoDB connection...")
             cls.client.close()
             cls.client = None
-        cls.db = None
-        cls.is_mock = False
+        if not cls.is_mock:
+            cls.db = None
+            cls.is_mock = False
         logger.info("Database connection closed.")
 
     @classmethod

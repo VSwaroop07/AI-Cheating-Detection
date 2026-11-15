@@ -5,6 +5,8 @@ from typing import Any, Dict, Optional
 
 from app.ml.object_detector import ObjectDetector
 from app.ml.video_analyzer import VideoAnalyzer
+from app.schemas.event import SeverityEnum
+from app.services.evidence_service import get_evidence_service
 from app.services.event_service import get_event_service
 
 logger = logging.getLogger(__name__)
@@ -46,6 +48,11 @@ class VideoHandler:
         timestamp = payload.get("timestamp", "")
         payload_size_kb = round(len(image_base64) * 0.75 / 1024, 2)
 
+        # Buffer frame into rolling in-memory buffer
+        evidence_service = get_evidence_service()
+        if image_base64:
+            evidence_service.add_frame(session_id, image_base64)
+
         # 1. Run facial mesh, head pose, and gaze analysis
         analyzer = get_video_analyzer()
         analysis_res = analyzer.analyze_frame(
@@ -62,6 +69,23 @@ class VideoHandler:
 
         # Combine detected suspicious events from both CV modalities
         all_events = analysis_res.events + object_res.events
+
+        # Capture evidence for medium and high severity events
+        for ev in all_events:
+            sev = ev.severity.value if hasattr(ev.severity, "value") else str(ev.severity).lower()
+            if sev in ("medium", "high"):
+                evidence_annotations = {
+                    "detected_objects": [obj.to_dict() for obj in object_res.detections],
+                    "face_count": analysis_res.face_count,
+                    "gaze_direction": analysis_res.gaze_direction,
+                    "head_pose": analysis_res.head_pose,
+                }
+                await evidence_service.capture_evidence_for_event(
+                    event=ev,
+                    triggering_frame=image_base64,
+                    annotations=evidence_annotations,
+                )
+
         event_payloads = [event.model_dump() for event in all_events]
 
         # Push to Central EventService (non-blocking async queue)

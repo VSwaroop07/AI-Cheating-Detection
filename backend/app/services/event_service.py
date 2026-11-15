@@ -89,10 +89,6 @@ class EventService:
         self._is_running = False
         if self._worker_task:
             self._worker_task.cancel()
-            try:
-                await self._worker_task
-            except asyncio.CancelledError:
-                pass
             self._worker_task = None
             logger.info("[EVENT SERVICE] Background event ingestion worker stopped.")
 
@@ -236,7 +232,24 @@ class EventService:
         event = self.validate_and_classify(raw_event)
         event_dict = event.model_dump()
 
-        # 2. Store in MongoDB
+        # 2. Automatically capture evidence for medium/high severity events if not already present
+        sev_str = event.severity.value if hasattr(event.severity, "value") else str(event.severity).lower()
+        if sev_str in ("medium", "high") and not event.evidence_path:
+            try:
+                from app.services.evidence_service import get_evidence_service
+
+                evidence_svc = get_evidence_service()
+                captured_path = await evidence_svc.capture_evidence_for_event(
+                    event=event,
+                    db=target_db,
+                )
+                if captured_path:
+                    event.evidence_path = captured_path
+                    event_dict["evidence_path"] = captured_path
+            except Exception as ev_err:
+                logger.debug(f"[EVENT SERVICE] Evidence auto-capture skipped: {ev_err}")
+
+        # 3. Store in MongoDB
         target_db = db or DatabaseManager.db
         if target_db is not None:
             try:
@@ -246,7 +259,7 @@ class EventService:
                     f"[EVENT SERVICE] MongoDB insertion failed for event {event.event_id}: {exc}"
                 )
 
-        # 3. Forward to Multimodal Fusion Engine
+        # 4. Forward to Multimodal Fusion Engine
         try:
             self.fusion_engine.process_event(event)
         except Exception as exc:

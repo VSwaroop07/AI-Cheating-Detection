@@ -198,7 +198,81 @@ class Settings(BaseSettings):
     )
     EVIDENCE_STORAGE_DIR: str = Field(
         default="backend/data/evidence",
-        description="Directory path for storing violation evidence (screenshots/audio clips)",
+        description="Directory path for storing violation evidence (screenshots/clips)",
+    )
+    EVIDENCE_RETENTION_DAYS: int = Field(
+        default=30,
+        description="Evidence retention period in days before automated cleanup",
+    )
+    EVIDENCE_MAX_SESSION_MB: float = Field(
+        default=100.0,
+        description="Maximum evidence storage allowed per session in megabytes",
+    )
+    EVIDENCE_COOLDOWN_SEC: float = Field(
+        default=10.0,
+        description="Minimum cooldown in seconds between duplicate evidence captures for identical event types",
+    )
+    EVIDENCE_SAVE_VIDEO_CLIPS: bool = Field(
+        default=True,
+        description="Whether to generate a 5-second video clip from rolling buffer for high severity events",
+    )
+    EVIDENCE_FRAME_BUFFER_SECONDS: float = Field(
+        default=5.0,
+        description="Rolling in-memory frame buffer length in seconds per session",
+    )
+
+    # Multimodal Fusion & Risk Scoring Thresholds
+    FUSION_SLIDING_WINDOW_SEC: float = Field(
+        default=30.0,
+        description="Sliding observation window in seconds for computing live risk score",
+    )
+    FUSION_DECAY_HALFLIFE_SEC: float = Field(
+        default=15.0,
+        description="Half-life in seconds for exponential time decay of historical events within window",
+    )
+    FUSION_CORRELATION_BONUS_2: float = Field(
+        default=1.50,
+        description="Cross-modal multiplier when events from 2 different modalities occur in sliding window",
+    )
+    FUSION_CORRELATION_BONUS_3: float = Field(
+        default=2.25,
+        description="Cross-modal multiplier when events from 3 different modalities occur in sliding window",
+    )
+    FUSION_SCORE_LOW_THRESHOLD: float = Field(
+        default=30.0,
+        description="Upper boundary for Low risk level (scores under 30.0 are Low)",
+    )
+    FUSION_SCORE_HIGH_THRESHOLD: float = Field(
+        default=65.0,
+        description="Lower boundary for High risk level (scores over 65.0 are High)",
+    )
+    FUSION_SCALE_FACTOR: float = Field(
+        default=35.0,
+        description="Linear scaling factor to calibrate raw decayed event points to a 0-100 score",
+    )
+    FUSION_EVENT_WEIGHTS: dict[str, float] = Field(
+        default_factory=lambda: {
+            "PHONE_DETECTED": 0.90,
+            "CELL_PHONE_DETECTED": 0.90,
+            "FACE_MISMATCH": 0.90,
+            "SCREEN_SHARE_STOPPED": 0.95,
+            "PROHIBITED_OBJECT": 0.85,
+            "SPEECH_WITHOUT_LIP_MOVEMENT": 0.85,
+            "MULTIPLE_FACES": 0.80,
+            "CLIPBOARD_PASTE": 0.60,
+            "FACE_ABSENT": 0.50,
+            "SUSTAINED_SPEECH": 0.50,
+            "TAB_SWITCH": 0.40,
+            "FULLSCREEN_EXIT": 0.40,
+            "WINDOW_BLUR": 0.35,
+            "CLIPBOARD_COPY": 0.30,
+            "CLIPBOARD_CUT": 0.30,
+            "HEAD_POSE_DEVIATION": 0.25,
+            "GAZE_DEVIATION": 0.20,
+            "SUDDEN_LOUD_NOISE": 0.20,
+            "RIGHT_CLICK": 0.15,
+        },
+        description="Base weights per suspicious event type for risk score aggregation",
     )
 
     @property

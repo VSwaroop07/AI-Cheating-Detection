@@ -13,6 +13,7 @@ from app.routers.auth import router as auth_router
 from app.routers.sessions import router as sessions_router
 from app.routers.candidates import router as candidates_router
 from app.routers.websocket import router as websocket_router
+from app.routers.evidence import router as evidence_router
 
 logging.basicConfig(
     level=logging.INFO if settings.DEBUG else logging.WARNING,
@@ -56,6 +57,7 @@ app.include_router(auth_router)
 app.include_router(sessions_router)
 app.include_router(candidates_router)
 app.include_router(websocket_router)
+app.include_router(evidence_router)
 
 
 @app.get("/", tags=["Root"])
