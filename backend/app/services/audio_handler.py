@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from app.ml.audio_analyzer import AudioAnalyzer
+from app.services.event_service import get_event_service
 from app.services.video_handler import get_video_analyzer
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,12 @@ class AudioHandler:
         )
 
         event_payloads = [event.model_dump() for event in audio_res.events]
+
+        # Push to Central EventService (non-blocking async queue)
+        if audio_res.events:
+            event_service = get_event_service()
+            for ev in audio_res.events:
+                event_service.publish_event(ev)
 
         if event_payloads:
             logger.warning(

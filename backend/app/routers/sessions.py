@@ -14,8 +14,15 @@ from app.schemas.face_auth import (
     FaceVerificationRequest,
     FaceVerificationResponse,
 )
+from app.schemas.event import (
+    ModalityEnum,
+    SeverityEnum,
+    PaginatedEventsResponse,
+    SuspiciousEvent,
+)
 from app.services.face_service import FaceService
 from app.services.session_service import SessionService
+from app.services.event_service import get_event_service
 from app.utils.dependencies import require_admin, get_current_user
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
@@ -123,4 +130,60 @@ async def verify_candidate_face(
         current_user=current_user,
         payload=payload,
     )
+
+
+@router.get(
+    "/{session_id}/events",
+    response_model=PaginatedEventsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Query, filter, and paginate suspicious events for an exam session",
+)
+async def get_session_events(
+    session_id: str,
+    modality: Optional[ModalityEnum] = Query(default=None, description="Filter by modality (video, audio, screen)"),
+    severity: Optional[SeverityEnum] = Query(default=None, description="Filter by severity (low, medium, high)"),
+    event_type: Optional[str] = Query(default=None, alias="type", description="Filter by event type name"),
+    start_time: Optional[str] = Query(default=None, description="ISO 8601 UTC lower bound timestamp"),
+    end_time: Optional[str] = Query(default=None, description="ISO 8601 UTC upper bound timestamp"),
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    current_user: UserResponse = Depends(get_current_user),
+    db: Any = Depends(get_database),
+) -> PaginatedEventsResponse:
+    """Fetch paginated suspicious events for an exam session with modality, severity, and time filters."""
+    # Validate participant or proctor access to this session
+    await SessionService.get_session_by_id(db=db, session_id=session_id, current_user=current_user)
+
+    event_service = get_event_service()
+    return await event_service.get_session_events(
+        session_id=session_id,
+        modality=modality,
+        severity=severity,
+        event_type=event_type,
+        start_time=start_time,
+        end_time=end_time,
+        page=page,
+        limit=limit,
+        db=db,
+    )
+
+
+@router.post(
+    "/{session_id}/events",
+    response_model=SuspiciousEvent,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record and process a suspicious event for a session",
+)
+async def create_session_event(
+    session_id: str,
+    payload: dict[str, Any],
+    current_user: UserResponse = Depends(get_current_user),
+    db: Any = Depends(get_database),
+) -> SuspiciousEvent:
+    """Validate, classify, store, and forward a suspicious event to the fusion engine."""
+    await SessionService.get_session_by_id(db=db, session_id=session_id, current_user=current_user)
+    payload["session_id"] = session_id
+    event_service = get_event_service()
+    return await event_service.record_event(payload, db=db)
+
 

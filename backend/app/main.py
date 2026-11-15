@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import DatabaseManager
+from app.services.event_service import get_event_service
 from app.routers.health import router as health_router
 from app.routers.auth import router as auth_router
 from app.routers.sessions import router as sessions_router
@@ -25,8 +26,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context manager for startup and shutdown events."""
     logger.info("Initializing backend application resources and database...")
     await DatabaseManager.connect()
+    event_service = get_event_service()
+    event_service.start_worker()
     yield
     logger.info("Cleaning up backend application resources...")
+    await event_service.stop_worker()
     await DatabaseManager.disconnect()
 
 

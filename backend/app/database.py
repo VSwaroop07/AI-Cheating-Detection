@@ -35,22 +35,42 @@ class InMemoryAsyncCollection:
         for k, v in filter_query.items():
             doc_val = doc.get(k)
             if isinstance(v, dict):
-                if "$in" in v:
-                    target_in = v["$in"]
-                    if isinstance(doc_val, list):
-                        if not any(item in target_in for item in doc_val):
+                for op, val in v.items():
+                    if op == "$in":
+                        if isinstance(doc_val, list):
+                            if not any(item in val for item in doc_val):
+                                return False
+                        elif doc_val not in val:
                             return False
-                    elif doc_val not in target_in:
-                        return False
-                elif "$eq" in v:
-                    if doc_val != v["$eq"]:
-                        return False
+                    elif op == "$eq":
+                        if doc_val != val:
+                            return False
+                    elif op == "$ne":
+                        if doc_val == val:
+                            return False
+                    elif op == "$gte":
+                        if doc_val is None or doc_val < val:
+                            return False
+                    elif op == "$gt":
+                        if doc_val is None or doc_val <= val:
+                            return False
+                    elif op == "$lte":
+                        if doc_val is None or doc_val > val:
+                            return False
+                    elif op == "$lt":
+                        if doc_val is None or doc_val >= val:
+                            return False
             elif isinstance(doc_val, list):
                 if v not in doc_val:
                     return False
             elif doc_val != v:
                 return False
         return True
+
+    async def count_documents(self, filter_query: Optional[Dict[str, Any]] = None) -> int:
+        """Count documents matching filter expression."""
+        filter_query = filter_query or {}
+        return sum(1 for doc in self._data if self._match_doc(doc, filter_query))
 
     async def find_one(self, filter_query: Dict[str, Any], projection: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         for doc in self._data:

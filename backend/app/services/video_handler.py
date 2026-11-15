@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 from app.ml.object_detector import ObjectDetector
 from app.ml.video_analyzer import VideoAnalyzer
+from app.services.event_service import get_event_service
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,12 @@ class VideoHandler:
         # Combine detected suspicious events from both CV modalities
         all_events = analysis_res.events + object_res.events
         event_payloads = [event.model_dump() for event in all_events]
+
+        # Push to Central EventService (non-blocking async queue)
+        if all_events:
+            event_service = get_event_service()
+            for ev in all_events:
+                event_service.publish_event(ev)
 
         if event_payloads:
             logger.warning(

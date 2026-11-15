@@ -35,3 +35,14 @@ class SuspiciousEvent(BaseModel):
     evidence_path: Optional[str] = Field(default=None, description="Path or URL to saved evidence file, or null")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Optional anomaly metadata (e.g. bounding boxes, labels)")
 
+
+class PaginatedEventsResponse(BaseModel):
+    """Paginated list of suspicious events with pagination metadata."""
+
+    total: int = Field(..., description="Total number of matching events")
+    page: int = Field(..., description="Current page number (1-based)")
+    limit: int = Field(..., description="Maximum items per page")
+    pages: int = Field(..., description="Total number of pages")
+    events: list[SuspiciousEvent] = Field(default_factory=list, description="List of events for current page")
+
+

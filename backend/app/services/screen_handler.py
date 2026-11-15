@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from app.ml.screen_analyzer import ScreenAnalyzer
+from app.services.event_service import get_event_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,11 @@ class ScreenHandler:
         )
 
         event_payload = suspicious_event.model_dump() if suspicious_event else None
+
+        # Push to Central EventService (non-blocking async queue)
+        if suspicious_event:
+            event_service = get_event_service()
+            event_service.publish_event(suspicious_event)
 
         if event_payload:
             logger.warning(
