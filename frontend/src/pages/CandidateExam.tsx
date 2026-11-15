@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useCapture } from "../hooks/useCapture";
+import { useScreenMonitor, ScreenViolation } from "../hooks/useScreenMonitor";
 import { WebcamCapture } from "../components/WebcamCapture";
 import { verifyCandidateFace, FaceVerificationResponse } from "../services/api";
 
@@ -39,6 +40,7 @@ export const CandidateExam: React.FC = () => {
   const {
     webcamRef,
     screenRef,
+    screenStream,
     permissions,
     connectionState,
     bufferedEventsCount,
@@ -49,7 +51,34 @@ export const CandidateExam: React.FC = () => {
     startCapture,
     stopCapture,
     sendTelemetryEvent,
+    sendScreenEvent,
   } = useCapture({ sessionId, fps: 2.5 });
+
+  // Screen and browser activity monitoring hook
+  const {
+    isFullscreen,
+    violationsCount,
+    lastViolation,
+    requestFullscreen,
+  } = useScreenMonitor({
+    sessionId,
+    enabled: examStarted && !submitted,
+    screenStream,
+    screenVideoRef: screenRef,
+    forceFullscreen: true,
+    onViolation: (violation: ScreenViolation) => {
+      sendScreenEvent({
+        event_type: violation.event_type,
+        timestamp: violation.timestamp,
+        away_duration_sec: violation.away_duration_sec,
+        screenshot_base64: violation.screenshot_base64,
+        details: violation.details,
+      });
+    },
+    onScreenShareEnded: () => {
+      alert("WARNING: Screen sharing was terminated. You must keep screen sharing active during the proctored exam.");
+    },
+  });
 
   const allConsentsGranted = consentCamera && consentMic && consentScreen;
   const isCandidateVerified = verificationResult?.status === "Verified";
@@ -347,6 +376,14 @@ export const CandidateExam: React.FC = () => {
             <div className="status-col telemetry-stats">
               <span>Frames: <strong>{framesSent}</strong> (~2.5 FPS)</span>
               <span>Audio Chunks: <strong>{audioChunksSent}</strong> (1s PCM)</span>
+              <span className={`badge ${isFullscreen ? "badge-verified" : "badge-rejected"}`} style={{ fontSize: "0.75rem", padding: "2px 6px" }}>
+                {isFullscreen ? "🖥️ Fullscreen Active" : "⚠️ Fullscreen Exited"}
+              </span>
+              {violationsCount.total > 0 && (
+                <span className="buffer-badge" style={{ background: "#fee2e2", color: "#991b1b", fontSize: "0.75rem" }} title="Recorded screen violations">
+                  ⚠️ {violationsCount.total} Screen Anomalies (Tab: {violationsCount.tabSwitches}, Blur: {violationsCount.windowBlurs}, Exit: {violationsCount.fullscreenExits})
+                </span>
+              )}
             </div>
 
             <div className="status-col timer-col">
@@ -356,6 +393,39 @@ export const CandidateExam: React.FC = () => {
               </span>
             </div>
           </div>
+
+          {!isFullscreen && !submitted && (
+            <div
+              className="alert alert-danger fullscreen-warning-banner"
+              style={{
+                margin: "1rem 0",
+                padding: "1rem",
+                border: "2px solid #ef4444",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <strong style={{ color: "#b91c1c", fontSize: "1.05rem" }}>
+                  ⚠️ Fullscreen Exam Environment Required:
+                </strong>
+                <p style={{ margin: "4px 0 0 0", color: "#7f1d1d", fontSize: "0.9rem" }}>
+                  Exiting fullscreen or switching windows is monitored and logged as a proctoring violation. Please return to fullscreen immediately.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => requestFullscreen()}
+                style={{ padding: "0.6rem 1.2rem", fontWeight: "bold", whiteSpace: "nowrap" }}
+              >
+                🖥️ Re-enter Fullscreen
+              </button>
+            </div>
+          )}
 
           {lastError && <div className="alert alert-danger">{lastError}</div>}
 

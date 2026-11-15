@@ -175,6 +175,32 @@ class Settings(BaseSettings):
         description="Probability threshold for Silero VAD speech detection",
     )
 
+    # Screen & Browser Activity Monitoring Thresholds
+    SCREEN_EVENT_COOLDOWN_SEC: float = Field(
+        default=2.0,
+        description="Minimum seconds between identical duplicate screen events (rate-limiting)",
+    )
+    TAB_SWITCH_MEDIUM_COUNT: int = Field(
+        default=3,
+        description="Tab switch count threshold to escalate severity to MEDIUM",
+    )
+    TAB_SWITCH_HIGH_COUNT: int = Field(
+        default=6,
+        description="Tab switch count threshold to escalate severity to HIGH",
+    )
+    AWAY_DURATION_MEDIUM_SEC: float = Field(
+        default=5.0,
+        description="Absence/away duration in seconds to escalate severity to MEDIUM",
+    )
+    AWAY_DURATION_HIGH_SEC: float = Field(
+        default=15.0,
+        description="Absence/away duration in seconds to escalate severity to HIGH",
+    )
+    EVIDENCE_STORAGE_DIR: str = Field(
+        default="backend/data/evidence",
+        description="Directory path for storing violation evidence (screenshots/audio clips)",
+    )
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Convert comma-separated CORS origins into a list of strings."""

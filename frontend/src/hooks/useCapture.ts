@@ -37,6 +37,7 @@ export interface UseCaptureReturn {
   startCapture: () => void;
   stopCapture: () => void;
   sendTelemetryEvent: (eventType: string, details?: Record<string, unknown>) => void;
+  sendScreenEvent: (payload: Record<string, unknown>) => void;
 }
 
 export function useCapture({
@@ -447,6 +448,18 @@ export function useCapture({
     });
   }, [sessionId, sendMessage]);
 
+  // Send screen monitoring violation event
+  const sendScreenEvent = useCallback((eventPayload: Record<string, unknown>) => {
+    sendMessage({
+      type: "screen",
+      session_id: sessionId,
+      payload: {
+        ...eventPayload,
+        timestamp: eventPayload.timestamp || new Date().toISOString(),
+      },
+    });
+  }, [sessionId, sendMessage]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -475,6 +488,7 @@ export function useCapture({
     startCapture,
     stopCapture,
     sendTelemetryEvent,
+    sendScreenEvent,
   };
 }
 
